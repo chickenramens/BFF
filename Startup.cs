@@ -16,6 +16,10 @@ using Microsoft.Identity.Web.UI;
 using Azure;
 using Microsoft.AspNetCore.Http.HttpResults;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http;
+using Microsoft.Extensions.Primitives;
+using System.Linq;
+using System.Collections;
 
 namespace BackendForFrontend
 {
@@ -100,27 +104,65 @@ namespace BackendForFrontend
                 );
                 
             });
-            /*
-            app.UseSpa(spa =>
+            _ = app.Use(async (context, next) =>
             {
-                spa.Options.SourcePath = "ClientApp";
-
-                if (env.IsDevelopment())
+                //if no access token, return 401
+                if(context.Session.GetString("access_token") == null)
                 {
-                    spa.UseReactDevelopmentServer(npmScript: "start");
+                    context.Response.StatusCode = 401;
+                    return;
                 }
-            });
-            */
-            app.Use(async (context, next) =>
-            {
-                if (context.Request.Path.StartsWithSegments("/api"))
+                try
                 {
-                    if (!context.User.Identity.IsAuthenticated)
+                    using (HttpClient client = new HttpClient())
                     {
-                        context.Response.StatusCode = 401;
+                        // set authorization header
+                        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", context.Session.GetString("access_token"));
+
+                        HttpResponseMessage response = null;
+                        var url = $"{Configuration["Proxy:Url"]}{context.Request.Path}";
+                        var queryString = context.Request.QueryString.ToString();
+                        if (!string.IsNullOrEmpty(queryString))
+                        {
+                            url += queryString;
+                        }
+
+                        if (context.Request.Method.ToLower() == "get")
+                        {
+                            response = await client.GetAsync(url);
+                        }
+                        else if (context.Request.Method.ToLower().Equals("post"))
+                        {
+                            response = await client.PostAsync(url, new StreamContent(context.Request.Body));
+                        }
+
+                        context.Response.StatusCode = (int)response.StatusCode;
+
+                        //write response headers to the client
+                        foreach (var header in response.Headers)
+                        {
+                            var values = new ArrayList();
+
+                            foreach (var value in header.Value)
+                            {
+                                values.Add(value);
+                            }
+                            context.Response.Headers.Add(header.Key, new StringValues(values.ToArray(typeof(string)) as string[]));
+                        }
+
+                        //write the response to the client
+                        await response.Content.CopyToAsync(context.Response.Body);
+
                         return;
                     }
                 }
+                catch (Exception ex)
+                {
+                    context.Response.StatusCode = 500;
+                    await context.Response.WriteAsync(ex.Message);
+                    return;
+                }
+
                 next(context);
             });
         }
@@ -155,9 +197,6 @@ namespace BackendForFrontend
 
             // Configure the Claims Issuer to be Auth0
             options.ClaimsIssuer = "Auth0";
-
-            options.SaveTokens = true;
-
             
             options.Events = new OpenIdConnectEvents
             {
@@ -186,29 +225,14 @@ namespace BackendForFrontend
                     context.ProtocolMessage.SetParameter("audience", Configuration["Auth0:ApiAudience"]);
                     return Task.CompletedTask;
                 },
-                OnUserInformationReceived = context =>
-                {
-                    return Task.CompletedTask;
-                },
-                OnTokenResponseReceived = context =>
-                {
-                    return Task.CompletedTask;
-                },
                 OnTokenValidated = context =>
                 {
                     context.HttpContext.Session.SetString("id_token", context.TokenEndpointResponse.IdToken);
                     context.HttpContext.Session.SetString("access_token", context.TokenEndpointResponse.AccessToken);
                     context.HttpContext.Session.SetString("refresh_token", context.TokenEndpointResponse.RefreshToken);
-                    //parse accesstoken
-                    var handler = new JwtSecurityTokenHandler();
-                    var token = handler.ReadJwtToken(context.TokenEndpointResponse.AccessToken);
                     
                     return Task.CompletedTask;
-                },
-                OnMessageReceived = context =>
-                {
-                    return Task.CompletedTask;
-                },
+                }
             };
         }
     }

@@ -20,6 +20,7 @@ using System.Net.Http;
 using Microsoft.Extensions.Primitives;
 using System.Linq;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace BackendForFrontend
 {
@@ -127,13 +128,68 @@ namespace BackendForFrontend
                             url += queryString;
                         }
 
+                        HttpContent content = null;
+                        switch(context.Request.Method.ToLower())
+                        {
+                            case "post":
+                            case "put":
+                                content = new StreamContent(context.Request.Body);
+                                break;
+
+                        }
+
+                        // set request headers from the client
+                        foreach (var header in context.Request.Headers)
+                        {
+                            if (header.Key.ToLower() == "host" || header.Key.ToLower() == "accept-encoding")
+                            {
+                                continue;
+                            }
+                            var values = new ArrayList();
+
+                            foreach (var value in header.Value)
+                            {
+                                values.Add(value);
+                            }
+
+                            IEnumerable<string> v = new StringValues(values.ToArray(typeof(string)) as string[]);
+
+                            switch (context.Request.Method.ToLower())
+                            {
+                                case "post":
+                                case "put":
+                                    if (header.Key.ToLower().StartsWith("content-"))
+                                    {
+                                        content.Headers.Add(header.Key, v);
+                                    }
+                                    else
+                                    {
+                                        client.DefaultRequestHeaders.Add(header.Key, v);
+                                    }
+                                    break;
+                                default:
+                                    if (!header.Key.ToLower().StartsWith("content-")) { 
+                                        client.DefaultRequestHeaders.Add(header.Key, v);
+                                    }
+                                    break;
+                            }
+                        }
+
                         if (context.Request.Method.ToLower() == "get")
                         {
                             response = await client.GetAsync(url);
                         }
                         else if (context.Request.Method.ToLower().Equals("post"))
                         {
-                            response = await client.PostAsync(url, new StreamContent(context.Request.Body));
+                            response = await client.PostAsync(url, content);
+                        }
+                        else if(context.Request.Method.ToLower().Equals("put"))
+                        {
+                            response = await client.PutAsync(url, content);
+                        }
+                        else if (context.Request.Method.ToLower().Equals("delete"))
+                        {
+                            response = await client.DeleteAsync(url);
                         }
 
                         context.Response.StatusCode = (int)response.StatusCode;

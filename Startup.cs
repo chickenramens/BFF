@@ -3,22 +3,14 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.SpaServices.ReactDevelopmentServer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using System;
 using System.Threading.Tasks;
-using Microsoft.Identity.Web;
-using Microsoft.Identity.Web.UI;
-using Azure;
-using Microsoft.AspNetCore.Http.HttpResults;
-using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http;
 using Microsoft.Extensions.Primitives;
-using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -50,12 +42,6 @@ namespace BackendForFrontend
                 o.Cookie.HttpOnly = true;
             })
             .AddOpenIdConnect("OpenIdConnect", options => ConfigureOpenIdConnect(options));
-
-
-//            services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-//                .AddMicrosoftIdentityWebApp(Configuration.GetSection("AzureAdB2C"));           
-
-
 
             services.AddControllersWithViews();
             
@@ -107,18 +93,23 @@ namespace BackendForFrontend
             });
             _ = app.Use(async (context, next) =>
             {
-                //if no access token, return 401
-                if(context.Session.GetString("access_token") == null)
-                {
-                    context.Response.StatusCode = 401;
-                    return;
-                }
                 try
                 {
                     using (HttpClient client = new HttpClient())
                     {
-                        // set authorization header
-                        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", context.Session.GetString("access_token"));
+                        if (context.Request.Headers.ContainsKey("Authorization"))
+                        {
+                            ;
+                        } else if (context.Session.GetString("access_token") != null)
+                        {
+                            // set authorization header
+                            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", context.Session.GetString("access_token"));
+                        }
+                        else
+                        {
+                            context.Response.StatusCode = 401;
+                            return;
+                        }
 
                         HttpResponseMessage response = null;
                         var url = $"{Configuration["Proxy:Url"]}{context.Request.Path}";
@@ -230,12 +221,6 @@ namespace BackendForFrontend
 
             // Configure the Auth0 Client ID and Client Secret
             options.ClientId = Configuration["Auth0:ClientId"];
-//            options.ClientSecret = Configuration["Auth0:ClientSecret"];
-
-            // Set response type to code
-//            options.ResponseType = OpenIdConnectResponseType.CodeIdToken;
-
-//            options.ResponseMode = OpenIdConnectResponseMode.FormPost;
             options.ResponseType = OpenIdConnectResponseType.Code;
             options.UsePkce = true;
 
@@ -243,12 +228,7 @@ namespace BackendForFrontend
             // Configure the scope
             options.Scope.Clear();
             options.Scope.Add("openid");
-//            options.Scope.Add("offline_access");
-//            options.Scope.Add("read:weather");
 
-            // Set the callback path, so Auth0 will call back to http://localhost:3000/callback
-            // Also ensure that you have added the URL as an Allowed Callback URL in your Auth0 dashboard
-            //            options.CallbackPath = new PathString("/callback");
             options.CallbackPath = new PathString("/signin-oidc");
 
             // Configure the Claims Issuer to be Auth0

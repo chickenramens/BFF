@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -21,11 +22,12 @@ namespace BackendForFrontend.Controllers
         [Authorize]
         public async Task<ActionResult> Logout()
         {
-          await HttpContext.SignOutAsync();
+          HttpContext.Session.Clear();
+          await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-          return new SignOutResult("Auth0", new AuthenticationProperties
+          return new SignOutResult("OpenIdConnect", new AuthenticationProperties
           {
-            RedirectUri = Url.Action("Index", "Home")
+            RedirectUri = "/"
           });
         }
 

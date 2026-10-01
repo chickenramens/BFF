@@ -21,11 +21,12 @@ namespace BackendForFrontend.Controllers
         [Authorize]
         public async Task<ActionResult> Logout()
         {
+          HttpContext.Session.Clear();
           await HttpContext.SignOutAsync();
 
-          return new SignOutResult("Auth0", new AuthenticationProperties
+          return new SignOutResult("OpenIdConnect", new AuthenticationProperties
           {
-            RedirectUri = Url.Action("Index", "Home")
+            RedirectUri = "/"
           });
         }
 

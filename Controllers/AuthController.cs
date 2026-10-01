@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -22,7 +23,7 @@ namespace BackendForFrontend.Controllers
         public async Task<ActionResult> Logout()
         {
           HttpContext.Session.Clear();
-          await HttpContext.SignOutAsync();
+          await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
           return new SignOutResult("OpenIdConnect", new AuthenticationProperties
           {
